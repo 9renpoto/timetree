@@ -11,8 +11,8 @@
     "test": "playwright test"
   },
   "dependencies": {
-    "@timetreeapp/web-api": "^3.0.0",
     "@app/ui": "^0.0.1",
+    "@timetreeapp/web-api": "^3.0.1",
     "next": "12.3.4",
     "next-plugin-preact": "3.0.7",
     "react": "npm:@preact/compat@17.1.2",
