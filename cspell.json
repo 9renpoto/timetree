@@ -12,9 +12,12 @@
   "words": [
     "9renpoto",
     "Autoprefix",
+    "Backoff",
     "gtag",
     "lucide",
     "preact",
+    "reqwest",
+    "retryable",
     "serde",
     "stylelint",
     "tauri",

@@ -1,6 +1,9 @@
+use std::error::Error;
+
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, RequestBuilder};
+use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use serde::{Deserialize, Serialize};
 use serde_json::{from_str, to_string};
-use std::error::Error;
 
 // Define your data structures here if needed (corresponding to deserialise/serialise in TypeScript)
 
@@ -47,22 +50,22 @@ fn normalize_request(data: &Data) -> String {
     to_string(data).unwrap()
 }
 
-// RetryOptions struct
 struct RetryOptions {
     retry: u32,
-    validate_retryable: Option<Box<dyn Fn(&reqwest::Error) -> bool>>,
-    on_retry: Option<Box<dyn Fn(&reqwest::Error, u32) -> ()>>,
 }
 
-// APIClient struct
 struct APIClient {
-    api: reqwest::Client,
+    api: ClientWithMiddleware,
     retry_options: RetryOptions,
 }
 
 impl APIClient {
-    fn new(options: reqwest::ClientBuilder, retry_options: RetryOptions) -> Self {
-        let api = options.build().unwrap();
+    fn new(retry_options: RetryOptions) -> Self {
+        let retry_policy =
+            ExponentialBackoff::builder().build_with_max_retries(retry_options.retry);
+        let api = ClientBuilder::new(reqwest::Client::new())
+            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+            .build();
         Self { api, retry_options }
     }
 
@@ -70,9 +73,8 @@ impl APIClient {
     async fn get<T: for<'de> Deserialize<'de>>(
         &self,
         url: &str,
-        options: Option<reqwest::RequestBuilder>,
     ) -> Result<T, Box<dyn Error>> {
-        let response = self.wrap_request(self.api.get(url), options).await?;
+        let response = self.wrap_request(self.api.get(url)).await?;
         if let Some(json_str) = response.text().await.unwrap().as_str() {
             if let Some(data) = normalize_response(Some(json_str)) {
                 return Ok(data);
@@ -86,11 +88,10 @@ impl APIClient {
         &self,
         url: &str,
         json: &Data,
-        options: Option<reqwest::RequestBuilder>,
     ) -> Result<T, Box<dyn Error>> {
         let normalized_json = normalize_request(json);
         let response = self
-            .wrap_request(self.api.post(url).json(&normalized_json), options)
+            .wrap_request(self.api.post(url).json(&normalized_json))
             .await?;
         if let Some(json_str) = response.text().await.unwrap().as_str() {
             if let Some(data) = normalize_response(Some(json_str)) {
@@ -105,11 +106,10 @@ impl APIClient {
         &self,
         url: &str,
         json: &Data,
-        options: Option<reqwest::RequestBuilder>,
     ) -> Result<T, Box<dyn Error>> {
         let normalized_json = normalize_request(json);
         let response = self
-            .wrap_request(self.api.put(url).json(&normalized_json), options)
+            .wrap_request(self.api.put(url).json(&normalized_json))
             .await?;
         if let Some(json_str) = response.text().await.unwrap().as_str() {
             if let Some(data) = normalize_response(Some(json_str)) {
@@ -123,37 +123,17 @@ impl APIClient {
     async fn delete(
         &self,
         url: &str,
-        options: Option<reqwest::RequestBuilder>,
     ) -> Result<(), Box<dyn Error>> {
-        self.wrap_request(self.api.delete(url), options).await?;
+        self.wrap_request(self.api.delete(url)).await?;
         Ok(())
     }
 
-    // WrapRequest function
     async fn wrap_request(
         &self,
-        request: reqwest::RequestBuilder,
-        options: Option<reqwest::RequestBuilder>,
+        request: RequestBuilder,
     ) -> Result<reqwest::Response, Box<dyn Error>> {
-        let retry = self.retry_options.retry;
-        let validate_retryable = self.retry_options.validate_retryable.as_ref().cloned();
-        let on_retry = self.retry_options.on_retry.as_ref().cloned();
-        let retryable_status_codes = vec![408, 413, 429, 500, 502, 503, 504];
+        let response = request.send().await.unwrap();
 
-        retry(retry, |retry_count| async {
-            let mut response = request.try_clone().unwrap().send().await?;
-
-            if retry_count == retry {
-                // On last retry, always bail on any error
-                response.error_for_status_ref()?;
-            } else if let Some(status) = response.status().as_u16() {
-                if retryable_status_codes.contains(&status) {
-                    return Err(response.error_for_status_ref().err().unwrap());
-                }
-            }
-
-            Ok(response)
-        })
-        .await
+        Ok(response)
     }
 }
