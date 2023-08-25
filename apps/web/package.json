@@ -7,7 +7,6 @@
     "build": "next build",
     "dev": "next",
     "start": "next start",
-    "nextjs-bundle-analysis": "npx -p nextjs-bundle-analysis",
     "test": "jest"
   },
   "dependencies": {
@@ -31,10 +30,5 @@
     "@testing-library/preact": "^3.2.3",
     "@types/gtag.js": "^0.0.12",
     "ts-node": "^10.9.1"
-  },
-  "nextBundleAnalysis": {
-    "budget": 358400,
-    "budgetPercentIncreaseRed": 20,
-    "showDetails": true
   }
 }
