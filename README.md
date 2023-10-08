@@ -14,4 +14,4 @@ PRs accepted.
 
 ## License
 
-[MIT](./LICENSE) © TBA
+[MIT](./LICENSE) © 9renpoto
